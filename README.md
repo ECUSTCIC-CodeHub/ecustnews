@@ -1,10 +1,11 @@
 # 华东理工大学新闻通知自动抓取脚本
 
 ## 功能说明
-- 自动从华东理工大学新闻网站抓取近三日通知
+- 自动从华东理工大学新闻网站、学生处和教务处网站抓取近期通知
 - 支持多个收件人邮箱配置
 - 生成美观的HTML邮件格式
 - 完整的日志记录功能
+- 智能日期解析和链接处理
 
 ## 安装依赖
 
@@ -24,15 +25,16 @@ pip install -r requirements.txt
         "port": 587,
         "username": "your_email@qq.com",
         "password": "your_app_password",
-        "sender_email": "your_email@qq.com",
-        "sender_name": "华理新闻助手"
-    }
+        "sender_email": "your_email@qq.com"
+    },
+    "days": 3
 }
 ```
 
 **注意：**
 - 如果使用QQ邮箱，需要开启SMTP服务并使用授权码作为密码
 - 如果使用其他邮箱，请相应修改server和port
+- `days` 参数用于设置抓取多少天内的通知，默认为3天
 
 ### 2. 收件人配置 (emails.json)
 修改 `emails.json` 文件添加收件人：
@@ -78,8 +80,8 @@ python news_scraper.py
 ## 文件结构
 ```
 ecustnews/
-├── news_scraper.py     # 主脚本
-├── config.json         # 邮箱配置
+├── news_scraper.py     # 主脚本（包含学校新闻网、学生处和教务处抓取逻辑）
+├── config.json         # 邮箱配置和抓取天数设置
 ├── emails.json         # 收件人列表
 ├── requirements.txt    # 依赖包
 ├── README.md          # 说明文档
