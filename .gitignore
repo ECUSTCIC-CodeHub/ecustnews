@@ -1,0 +1,4 @@
+config.json
+emails.json
+news_scraper.log
+*.html
