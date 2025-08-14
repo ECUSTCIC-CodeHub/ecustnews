@@ -413,7 +413,7 @@ class NewsScraperECUST:
         html_content += """
             <div class="footer">
                 <p>此邮件由自动化脚本发送，请勿回复。</p>
-                <p>如需停止接收，请联系管理员。</p>
+                <p>如需停止接收，请访问<a href="https://news.bestzyq.cn/" target="_blank">ECUSTNEWS NOTIFICATION PROJECT网站</a>。</p>
             </div>
         </body>
         </html>
