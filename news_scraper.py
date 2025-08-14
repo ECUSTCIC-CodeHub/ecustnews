@@ -45,6 +45,30 @@ class NewsScraperECUST:
         self.jwc_base_url = "https://jwc.ecust.edu.cn"
         self.jwc_news_url = "https://jwc.ecust.edu.cn/main.htm"
         
+        # 代理设置
+        self.proxies = None
+        if 'proxy' in self.config and self.config['proxy'].get('enabled', False):
+            proxy_config = self.config['proxy']
+            proxy_url = proxy_config.get('url', '')
+            proxy_username = proxy_config.get('username', '')
+            proxy_password = proxy_config.get('password', '')
+            
+            if proxy_url:
+                # 如果有用户名和密码，则添加到代理URL中
+                if proxy_username and proxy_password:
+                    # 解析代理URL
+                    from urllib.parse import urlparse, urlunparse
+                    parsed = urlparse(proxy_url)
+                    netloc = f"{proxy_username}:{proxy_password}@{parsed.netloc}"
+                    proxy_url = urlunparse((parsed.scheme, netloc, parsed.path, 
+                                           parsed.params, parsed.query, parsed.fragment))
+                
+                self.proxies = {
+                    'http': proxy_url,
+                    'https': proxy_url
+                }
+                logging.info(f"已启用代理: {proxy_url.replace(proxy_password, '****') if proxy_password else proxy_url}")
+        
     def load_config(self):
         """加载配置文件"""
         try:
@@ -70,7 +94,7 @@ class NewsScraperECUST:
         }
         
         try:
-            response = requests.get(self.news_url, headers=headers, timeout=10)
+            response = requests.get(self.news_url, headers=headers, timeout=10, proxies=self.proxies)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
             
@@ -150,7 +174,7 @@ class NewsScraperECUST:
         }
         
         try:
-            response = requests.get(self.student_news_url, headers=headers, timeout=10)
+            response = requests.get(self.student_news_url, headers=headers, timeout=10, proxies=self.proxies)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
             
@@ -267,7 +291,7 @@ class NewsScraperECUST:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         try:
-            response = requests.get(self.jwc_news_url, headers=headers, timeout=10)
+            response = requests.get(self.jwc_news_url, headers=headers, timeout=10, proxies=self.proxies)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -439,9 +463,33 @@ class NewsScraperECUST:
             logging.error(f"发送邮件失败: {e}")
             return False
     
+    def check_proxy(self):
+        """检查代理是否可用"""
+        if not self.proxies:
+            return True
+            
+        test_url = "https://www.baidu.com"
+        try:
+            logging.info("正在测试代理连接...")
+            response = requests.get(test_url, proxies=self.proxies, timeout=5)
+            if response.status_code == 200:
+                logging.info("代理连接测试成功")
+                return True
+            else:
+                logging.warning(f"代理连接测试失败，状态码: {response.status_code}")
+                return False
+        except Exception as e:
+            logging.error(f"代理连接测试失败: {e}")
+            return False
+        
     def run(self):
         """运行主程序"""
         logging.info("开始抓取华东理工大学新闻...")
+        
+        # 如果启用了代理，先测试代理是否可用
+        if self.proxies and not self.check_proxy():
+            logging.error("代理不可用，程序退出")
+            return
         
         all_news_items = []
         

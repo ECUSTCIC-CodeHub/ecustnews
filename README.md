@@ -27,7 +27,13 @@ pip install -r requirements.txt
         "password": "your_app_password",
         "sender_email": "your_email@qq.com"
     },
-    "days": 3
+    "days": 0,
+    "proxy": {
+        "enabled": false,
+        "url": "http://127.0.0.1:7890",
+        "username": "",
+        "password": ""
+    }
 }
 ```
 
@@ -46,7 +52,7 @@ pip install -r requirements.txt
         "email": "zhangsan@example.com"
     },
     {
-        "name": "李四", 
+        "name": "李四",
         "email": "lisi@example.com"
     }
 ]
