@@ -45,6 +45,10 @@ class NewsScraperECUST:
         self.jwc_base_url = "https://jwc.ecust.edu.cn"
         self.jwc_news_url = "https://jwc.ecust.edu.cn/main.htm"
         
+        # 研究生院网站
+        self.gschool_base_url = "https://gschool.ecust.edu.cn"
+        self.gschool_news_url = "https://gschool.ecust.edu.cn/12753/list.htm"
+        
         # 代理设置
         self.proxies = None
         if 'proxy' in self.config and self.config['proxy'].get('enabled', False):
@@ -339,6 +343,99 @@ class NewsScraperECUST:
         except Exception as e:
             logging.error(f"获取教务处新闻列表失败: {e}")
             return []
+            
+    def get_gschool_news_list(self):
+        """获取研究生院网站的新闻列表"""
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        try:
+            response = requests.get(self.gschool_news_url, headers=headers, timeout=10, proxies=self.proxies)
+            response.encoding = 'utf-8'
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            news_items = []
+            
+            # 查找新闻列表容器
+            news_list = soup.find('ul', class_='news_list list2')
+            if not news_list:
+                logging.warning("未找到研究生院新闻列表容器")
+                return news_items
+            
+            # 提取每条新闻
+            items = news_list.find_all('li')
+            for item in items:
+                try:
+                    # 提取标题和链接
+                    title_span = item.find('span', class_='news_title')
+                    if not title_span:
+                        continue
+                    
+                    title_link = title_span.find('a')
+                    if not title_link:
+                        continue
+                    
+                    title = title_link.get('title')
+                    if not title:
+                        title = title_link.get_text(strip=True)
+                    
+                    link = title_link.get('href')
+                    if not link:
+                        continue
+                    
+                    # 处理相对链接
+                    if link.startswith('/'):
+                        link = self.gschool_base_url + link
+                    elif not link.startswith('http'):
+                        link = self.gschool_base_url + '/' + link
+                    
+                    # 提取日期
+                    news_date = None
+                    news_meta = item.find('span', class_='news_meta')
+                    
+                    if news_meta:
+                        date_text = news_meta.get_text(strip=True)
+                        # 处理格式为 "2023-11-01" 的日期
+                        try:
+                            year, month, day = date_text.split('-')
+                            news_date = datetime.datetime(int(year), int(month), int(day)).date()
+                        except (ValueError, AttributeError):
+                            logging.debug(f"研究生院日期解析失败: {date_text}")
+                    
+                    # 如果无法从 news_meta 获取日期，尝试从链接中提取
+                    if not news_date and link:
+                        # 从链接中提取日期 (格式如 /2023/1101/c1048a162142/page.htm)
+                        date_match = re.search(r'/(\d{4})/(\d{2})(\d{2})/', link)
+                        if date_match:
+                            try:
+                                year = int(date_match.group(1))
+                                month = int(date_match.group(2))
+                                day = int(date_match.group(3))
+                                news_date = datetime.datetime(year, month, day).date()
+                            except (ValueError, IndexError):
+                                logging.debug(f"从链接提取研究生院日期失败: {link}")
+                    
+                    # 如果所有方法都无法提取日期，使用当前日期
+                    if not news_date:
+                        news_date = datetime.date.today()
+                    
+                    news_items.append({
+                        'title': title,
+                        'link': link,
+                        'date': news_date,
+                        'source': '研究生院'
+                    })
+                    
+                except Exception as e:
+                    logging.warning(f"解析研究生院新闻项时出错: {e}")
+                    continue
+            
+            return news_items
+            
+        except Exception as e:
+            logging.error(f"获取研究生院新闻列表失败: {e}")
+            return []
 
     
     def _extract_date_from_link(self, href):
@@ -551,6 +648,14 @@ class NewsScraperECUST:
             all_news_items.extend(jwc_news)
         else:
             logging.warning("未获取到教务处网站的新闻")
+            
+        # 获取研究生院网站的新闻列表
+        gschool_news = self.get_gschool_news_list()
+        if gschool_news:
+            logging.info(f"获取到研究生院网站 {len(gschool_news)} 条新闻")
+            all_news_items.extend(gschool_news)
+        else:
+            logging.warning("未获取到研究生院网站的新闻")
         
         if not all_news_items:
             logging.warning("未获取到任何新闻")
