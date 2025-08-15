@@ -372,6 +372,24 @@ class NewsScraperECUST:
         # 按日期降序排列
         recent_news.sort(key=lambda x: x['date'], reverse=True)
         return recent_news
+        
+    def filter_news_by_category(self, news_items, categories):
+        """根据分类筛选新闻"""
+        if not categories:  # 如果没有指定分类，返回所有新闻
+            return news_items
+            
+        filtered_news = []
+        for item in news_items:
+            source = item.get('source', '').lower()
+            
+            # 根据来源匹配分类
+            if ('jwc' in categories and source == '教务处') or \
+               ('news' in categories and source == '学校新闻网') or \
+               ('student' in categories and source == '学生处') or \
+               ('gschool' in categories and source == '研究生院'):  # 注意：目前代码中没有研究生院的爬取逻辑
+                filtered_news.append(item)
+                
+        return filtered_news
     
     def generate_email_content(self, news_items):
         """生成邮件内容"""
@@ -421,7 +439,7 @@ class NewsScraperECUST:
         
         return html_content
     
-    def send_email(self, content, news_count):
+    def send_email(self, content, news_count, news_items):
         """发送邮件"""
         if not self.config.get('smtp'):
             logging.error("SMTP配置不存在")
@@ -430,28 +448,45 @@ class NewsScraperECUST:
         smtp_config = self.config['smtp']
         
         try:
-            # 创建邮件
-            msg = MIMEMultipart('alternative')
-            msg['From'] = f"{smtp_config['sender_email']}"
-            msg['Subject'] = f"华东理工大学今日通知 ({news_count}条)"
-            
-            # 添加HTML内容
-            html_part = MIMEText(content, 'html', 'utf-8')
-            msg.attach(html_part)
-            
             # 连接SMTP服务器
             server = smtplib.SMTP_SSL(smtp_config['server'], smtp_config['port'])
             server.login(smtp_config['username'], smtp_config['password'])
             
-            # 发送给每个收件人
+            # 发送给每个收件人，根据其订阅的分类
             success_count = 0
             for email_info in self.emails:
                 try:
+                    # 获取用户订阅的分类
+                    user_categories = email_info.get('categories', [])
+                    
+                    # 如果用户没有订阅任何分类，则发送所有新闻
+                    if not user_categories:
+                        filtered_news = news_items
+                    else:
+                        # 根据用户订阅的分类筛选新闻
+                        filtered_news = self.filter_news_by_category(news_items, user_categories)
+                    
+                    # 如果没有符合用户订阅分类的新闻，则跳过该用户
+                    if not filtered_news:
+                        logging.info(f"跳过 {email_info['email']}，没有符合订阅分类的新闻")
+                        continue
+                    
+                    # 为该用户生成邮件内容
+                    user_content = self.generate_email_content(filtered_news)
+                    
+                    # 创建邮件
+                    msg = MIMEMultipart('alternative')
+                    msg['From'] = f"{smtp_config['sender_email']}"
                     msg['To'] = f"{email_info['name']} <{email_info['email']}>"
+                    msg['Subject'] = f"华东理工大学今日通知 ({len(filtered_news)}条)"
+                    
+                    # 添加HTML内容
+                    html_part = MIMEText(user_content, 'html', 'utf-8')
+                    msg.attach(html_part)
+                    
                     server.send_message(msg)
-                    logging.info(f"邮件发送成功: {email_info['email']}")
+                    logging.info(f"邮件发送成功: {email_info['email']} (分类: {', '.join(user_categories) if user_categories else '全部'})")
                     success_count += 1
-                    del msg['To']  # 删除To字段，为下一个收件人准备
                 except Exception as e:
                     logging.error(f"发送邮件到 {email_info['email']} 失败: {e}")
             
@@ -527,12 +562,10 @@ class NewsScraperECUST:
         recent_news = self.filter_recent_news(all_news_items)
         logging.info(f"筛选出今日新闻 {len(recent_news)} 条")
         
-        # 生成邮件内容
-        email_content = self.generate_email_content(recent_news)
-        
         # 只有在有新通知时才发送邮件
         if recent_news and self.emails:
-            self.send_email(email_content, len(recent_news))
+            # 直接传递新闻列表，在send_email中根据用户订阅分类进行筛选
+            self.send_email("", len(recent_news), recent_news)
         elif not recent_news:
             logging.info("今日暂无新通知，不发送邮件")
         else:
