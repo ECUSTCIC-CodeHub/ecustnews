@@ -614,6 +614,25 @@ class NewsScraperECUST:
             logging.error(f"代理连接测试失败: {e}")
             return False
         
+    def save_news_to_json(self, news_items, filename='news.json'):
+        """将新闻保存到JSON文件"""
+        try:
+            # 将日期对象转换为字符串，以便JSON序列化
+            serializable_news = []
+            for item in news_items:
+                news_item = item.copy()
+                if isinstance(news_item['date'], datetime.date):
+                    news_item['date'] = news_item['date'].strftime('%Y-%m-%d')
+                serializable_news.append(news_item)
+            
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(serializable_news, f, ensure_ascii=False, indent=4)
+            logging.info(f"成功保存 {len(news_items)} 条新闻到 {filename}")
+            return True
+        except Exception as e:
+            logging.error(f"保存新闻到JSON文件失败: {e}")
+            return False
+    
     def run(self):
         """运行主程序"""
         logging.info("开始抓取华东理工大学新闻...")
@@ -665,14 +684,17 @@ class NewsScraperECUST:
         
         # 筛选今日新闻
         recent_news = self.filter_recent_news(all_news_items)
-        logging.info(f"筛选出今日新闻 {len(recent_news)} 条")
+        logging.info(f"筛选出最近 {self.config['days']} 天内的新闻 {len(recent_news)} 条")
+        
+        # 保存新闻到JSON文件
+        self.save_news_to_json(recent_news)
         
         # 只有在有新通知时才发送邮件
         if recent_news and self.emails:
             # 直接传递新闻列表，在send_email中根据用户订阅分类进行筛选
             self.send_email("", len(recent_news), recent_news)
         elif not recent_news:
-            logging.info("今日暂无新通知，不发送邮件")
+            logging.info("最近无新通知，不发送邮件")
         else:
             logging.warning("没有配置收件人邮箱")
         
